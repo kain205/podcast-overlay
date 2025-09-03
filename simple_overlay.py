@@ -2,7 +2,9 @@ import sys
 import time
 import os
 import re
-from datetime import datetime
+import subprocess
+import yt_dlp
+from pathlib import Path
 from PySide6.QtWidgets import QApplication, QMainWindow, QLabel
 from PySide6.QtCore import Qt, QTimer, QThread, Signal
 from PySide6.QtGui import QFont
@@ -16,7 +18,7 @@ class StreamingTextOverlay(QMainWindow):
         super().__init__()
         self.setup_ui()
         self.current_text = ""
-        self.simulator = None
+        self.worker = None
         
         # Add timer to keep window topmost
         self.topmost_timer = QTimer()
@@ -28,12 +30,12 @@ class StreamingTextOverlay(QMainWindow):
         self.setWindowFlags(
             Qt.WindowStaysOnTopHint |
             Qt.FramelessWindowHint |
-            Qt.Tool  # Removed Qt.WindowTransparentForInput
+            Qt.Tool
         )
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         
         # Text display
-        self.text_label = QLabel("Waiting for text...")
+        self.text_label = QLabel("Waiting for process to start...")
         self.text_label.setAlignment(Qt.AlignCenter)
         self.text_label.setWordWrap(True)
         
@@ -84,10 +86,10 @@ class StreamingTextOverlay(QMainWindow):
     def mousePressEvent(self, event):
         """Handle mouse clicks - right click to close, left click to drag"""
         if event.button() == Qt.RightButton:
-            if self.simulator:
-                self.simulator.stop()
-                self.simulator.wait()
-            self.topmost_timer.stop()  # Stop the timer before quitting
+            if self.worker:
+                self.worker.stop()
+                self.worker.wait()
+            self.topmost_timer.stop()
             QApplication.quit()
         elif event.button() == Qt.LeftButton:
             self.drag_start_position = event.globalPosition().toPoint()
@@ -99,92 +101,79 @@ class StreamingTextOverlay(QMainWindow):
             self.move(self.x() + delta.x(), self.y() + delta.y())
             self.drag_start_position = event.globalPosition().toPoint()
 
-class SRTReader(QThread):
-    """Read and stream text from SRT files"""
+class ProcessingThread(QThread):
+    """Runs the download and transcription process in the background."""
     text_updated = Signal(str)
     
-    def __init__(self, downloads_path="downloads"):
+    def __init__(self, url):
         super().__init__()
         self.running = True
-        self.downloads_path = downloads_path
-        self.current_file = None
-        self.subtitles = []
-        self.current_index = 0
-        
-    def parse_time(self, time_str):
-        """Convert SRT time format to milliseconds"""
-        h, m, s = time_str.split(':')
-        s, ms = s.split(',')
-        return int(h) * 3600000 + int(m) * 60000 + int(s) * 1000 + int(ms)
-    
-    def get_srt_file(self):
-        """Get the first SRT file found in downloads folder"""
-        try:
-            srt_files = [f for f in os.listdir(self.downloads_path) if f.endswith('.srt')]
-            if srt_files:
-                return os.path.join(self.downloads_path, srt_files[0])
-            return None
-        except Exception as e:
-            print(f"Error finding SRT file: {e}")
-            return None
-    
-    def load_srt(self, file_path):
-        """Load subtitles from SRT file"""
-        try:
-            with open(file_path, 'r', encoding='utf-8') as f:
-                content = f.read()
-            
-            # Split by double newlines to get subtitle blocks
-            blocks = re.split(r'\n\s*\n', content.strip())
-            subtitles = []
-            
-            for block in blocks:
-                lines = block.strip().split('\n')
-                if len(lines) >= 3:
-                    # Extract timing
-                    time_line = lines[1]
-                    start_time, end_time = time_line.split(' --> ')
-                    
-                    # Extract text (everything after timing line)
-                    text = ' '.join(lines[2:]).strip()
-                    
-                    subtitles.append({
-                        'start': self.parse_time(start_time),
-                        'end': self.parse_time(end_time),
-                        'text': text
-                    })
-            
-            return subtitles
-        except Exception as e:
-            print(f"Error parsing SRT file: {e}")
-            return []
-    
+        self.url = url
+        self.proc = None
+
     def run(self):
-        """Stream text from SRT file"""
-        while self.running:
-            # Check for SRT file
-            srt_file = self.get_srt_file()
+        """Main processing logic."""
+        if not self.running:
+            return
+
+        try:
+            REPO_DIR = Path(__file__).parent
+            whisper = REPO_DIR / "build/bin/Release/whisper-cli.exe"
+            output_dir = REPO_DIR / "downloads"
+            output_dir.mkdir(exist_ok=True)
+
+            # 1. Download and convert audio
+            self.text_updated.emit("Downloading YouTube audio...")
+            print("Starting download...")
+            ydl_opts = {
+                'format': 'bestaudio',
+                'outtmpl': str(output_dir / '%(title)s.%(ext)s'),
+                'postprocessors': [{
+                    'key': 'FFmpegExtractAudio',
+                    'preferredcodec': 'mp3'
+                }],
+                'quiet': True, # Suppress yt-dlp console output
+            }
+            yt_dlp.YoutubeDL(ydl_opts).download([self.url])
+            print("Download finished.")
+
+            if not self.running: return
+
+            # 2. Transcribe with Whisper
+            audio_file = list(output_dir.glob("*.mp3"))[0]
+            self.text_updated.emit("Processing with Whisper...")
+            print(f"Starting transcription for {audio_file.name}...")
             
-            if srt_file and not self.subtitles:  # Only load if we haven't loaded subtitles yet
-                print(f"Loading SRT file: {srt_file}")
-                self.subtitles = self.load_srt(srt_file)
-                self.current_index = 0
+            self.proc = subprocess.Popen(
+                [str(whisper), "-f", str(audio_file), "-osrt"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT, # Redirect stderr to stdout
+                text=True,
+                encoding='utf-8'
+            )
+
+            # We still print whisper's output to console for debugging
+            for line in self.proc.stdout:
+                if not self.running:
+                    break
+                print(">>", line.strip())
             
-            if self.subtitles:
-                # Display current subtitle
-                if self.current_index < len(self.subtitles):
-                    self.text_updated.emit(self.subtitles[self.current_index]['text'])
-                    self.current_index += 1
-                else:
-                    # Loop back to start
-                    self.current_index = 0
-            else:
-                self.text_updated.emit("Waiting for SRT file in downloads folder...")
-            
-            time.sleep(3)  # Update every 3 seconds
-    
+            self.proc.wait()
+            self.text_updated.emit("Transcription finished.")
+            print("Transcription finished.")
+
+        except Exception as e:
+            error_message = f"An error occurred: {e}"
+            self.text_updated.emit(error_message)
+            print(error_message)
+
     def stop(self):
+        print("Stopping thread...")
         self.running = False
+        if self.proc and self.proc.poll() is None:
+            print("Terminating Whisper process...")
+            self.proc.terminate()
+            self.proc.wait()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
@@ -193,16 +182,20 @@ if __name__ == "__main__":
     overlay = StreamingTextOverlay()
     overlay.show()
     
-    # Start SRT reader
-    reader = SRTReader()
-    overlay.simulator = reader  # Keep the same attribute name for compatibility
-    reader.text_updated.connect(overlay.update_text)
-    reader.start()
+    # URL to process
+    url = "https://www.youtube.com/watch?v=kKJHT6VlWro"
+
+    # Start Processing worker
+    worker = ProcessingThread(url)
+    overlay.worker = worker
+    # Connect the signal to the overlay's update method
+    worker.text_updated.connect(overlay.update_text) 
+    worker.start()
     
     # Clean shutdown
     def cleanup():
-        reader.stop()
-        reader.wait()
+        worker.stop()
+        worker.wait()
         overlay.topmost_timer.stop()
     
     app.aboutToQuit.connect(cleanup)

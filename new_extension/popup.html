@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Audio Catcher</title>
+  <style>
+    body {
+      width: 200px;
+      padding: 20px;
+      font-family: Arial, sans-serif;
+    }
+    
+    #captureButton {
+      width: 100%;
+      padding: 10px;
+      font-size: 16px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: background-color 0.3s;
+    }
+    
+    #captureButton.start {
+      background-color: #4CAF50;
+      color: white;
+    }
+    
+    #captureButton.stop {
+      background-color: #f44336;
+      color: white;
+    }
+    
+    #status {
+      margin-top: 10px;
+      font-size: 14px;
+      color: #666;
+    }
+  </style>
+  <script src="popup.js"></script>
+</head>
+<body>
+  <button id="captureButton">Start Capture</button>
+  <div id="status">Ready</div>
+</body>
+</html>
