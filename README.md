@@ -1,83 +1,102 @@
-# Simple Text Overlay
+# Real-Time Transcription Overlay
 
-A lightweight, always-on-top text overlay that works with games and applications. Perfect for displaying subtitles, translations, or any continuous text stream.
+This project captures audio from a browser tab using a Chrome extension, transcribes it in real-time with a Whisper-based backend, and displays the subtitles on a customizable, always-on-top overlay.
 
-## Features
+## Architecture
 
-- Always-on-top overlay window
-- Works with fullscreen games
-- Draggable with left mouse click
-- Close with right mouse click
-- Semi-transparent background
-- Auto-cycling demo text
-- Customizable appearance
+The system consists of four main components that run independently:
 
-## Requirements
+1.  **Audio Source (Chrome Extension)**: A browser extension that captures audio from the active tab and streams it to the Gateway Server.
+2.  **Transcription Server (`simulstreaming_whisper_server.py`)**: A dedicated server running `SimulStreaming` with a whisper model. It listens on a TCP port for raw audio data and performs the transcription.
+3.  **Gateway Server (`websocket.py`)**: This server acts as a bridge. It receives audio from the Chrome extension via WebSocket, uses `ffmpeg` to convert it to the correct raw audio format, and forwards it to the Transcription Server. It then receives the resulting text and broadcasts it back to the overlay client.
+4.  **Overlay Client (`simple_overlay.py`)**: A PySide6 desktop application that connects to the Gateway Server as a WebSocket client. It listens for transcription text and displays it in a clean, frameless window that stays on top of other applications.
+
+## Prerequisites
+
+*   Python 3.8+
+*   `ffmpeg` installed and available in your system's PATH.
+*   A C++ compiler and build tools for dependencies.
+*   Google Chrome or a Chromium-based browser.
+
+## Setup & Installation
+
+1.  **Clone the repository:**
+
+    ```bash
+    git clone <your-repository-url>
+    cd <your-repository-name>
+    ```
+
+2.  **Create and activate a virtual environment:**
+
+    ```bash
+    # For Windows
+    python -m venv venv
+    .\venv\Scripts\activate
+
+    # For macOS/Linux
+    python3 -m venv venv
+    source venv/bin/activate
+    ```
+
+3.  **Install Python dependencies:**
+
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+    *(Note: You will need to create a `requirements.txt` file containing `websockets`, `pyside6`, `pywin32`, `whisper-streaming`, etc.)*
+
+4.  **Load the Chrome Extension:**
+    1.  Open Chrome and navigate to `chrome://extensions`.
+    2.  Enable "Developer mode" using the toggle in the top-right corner.
+    3.  Click "Load unpacked".
+    4.  Select the `new_extension` folder from this project.
+    5.  The "Audio Catcher" extension should now appear in your extensions list.
+
+## How to Reproduce Step-by-Step
+
+You will need to open **three separate terminal windows** and your Chrome browser.
+
+### Step 1: Start the Transcription Server
+
+In your **first terminal**, navigate to the `SimulStreaming-main` directory and run the `simulstreaming_whisper_server.py`. This server will perform the transcription.
 
 ```bash
-pip install PySide6 pywin32
+cd SimulStreaming-main
+python simulstreaming_whisper_server.py --model_path base.en --language en --task transcribe --warmup-file ../recording.wav
 ```
 
-## Quick Start
+Keep this terminal running.
 
-1. Run the overlay:
+### Step 2: Start the Gateway Server
+
+In your **second terminal**, run the `websocket.py` script from the project root. This server listens for audio from the Chrome extension.
+
+```bash
+python websocket.py
+```
+
+This will start listening on `ws://localhost:8765`. Keep this terminal running.
+
+### Step 3: Start the Overlay Client
+
+In your **third terminal**, run the `simple_overlay.py` script from the project root. This will open the transparent overlay window.
+
 ```bash
 python simple_overlay.py
 ```
 
-2. Controls:
-- Left-click and drag to move the overlay
-- Right-click to close the application
+The overlay will appear on your screen.
 
-## Customization
+### Step 4: Send Audio from Chrome
 
-### Window Position
-The overlay appears at the bottom center of your screen by default. Modify these values in `setup_ui()`:
+1.  Open a Chrome tab with the audio or video you want to transcribe.
+2.  Click the "Audio Catcher" extension icon in your browser toolbar.
+3.  Click the "Start Capture" button in the extension popup.
+4.  You should see the real-time transcription appear in the overlay window.
 
-```python
-self.setGeometry(
-    (screen.width() - overlay_width) // 2,  # x position
-    screen.height() - overlay_height - 50,   # y position
-    overlay_width,                          # width
-    overlay_height                          # height
-)
-```
+## How to Use the Overlay
 
-### Appearance
-Customize the overlay's appearance by modifying the stylesheet in `setup_ui()`:
-
-```python
-self.text_label.setStyleSheet("""
-    QLabel {
-        background-color: rgba(0, 0, 0, 220);  # Background color and opacity
-        color: #FFFFFF;                        # Text color
-        padding: 20px;                         # Inner padding
-        border-radius: 12px;                   # Rounded corners
-        font-size: 20px;                       # Text size
-        font-weight: bold;                     # Text weight
-        border: 2px solid rgba(255, 255, 255, 80);  # Border
-        font-family: 'Segoe UI', Arial, sans-serif;
-    }
-""")
-```
-
-### Text Update Interval
-Change how frequently the demo text updates by modifying the sleep duration in `TextSimulator`:
-
-```python
-time.sleep(3)  # Update every 3 seconds
-```
-
-## Game Compatibility
-
-The overlay uses Win32 API to maintain visibility in games:
-- Works with most windowed and fullscreen games
-- May be blocked by some games with anti-cheat systems
-- Performance impact is minimal
-
-## Coming Soon
-
-- WhisperCPP integration for real-time audio transcription
-- Custom text input support
-- Multiple overlay instances
-- Hotkey controls
+*   **Move:** Click and drag the overlay with the **left mouse button**.
+*   **Close:** **Right-click** anywhere on the overlay to close the application.
