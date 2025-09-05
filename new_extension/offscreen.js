@@ -54,10 +54,11 @@ async function startRecording(streamId) {
     // Create recorder
     recorder = new MediaRecorder(mediaStream, { mimeType: 'audio/webm' });
     
-    recorder.ondataavailable = (event) => {
-      if (event.data.size > 0) {
-        data.push(event.data);
-        console.log("Offscreen: Data chunk received, size:", event.data.size);
+    recorder.ondataavailable = async (event) => {
+      if (event.data.size > 0 && socket && socket.readyState == WebSocket.OPEN) {
+        const arrayBuffer = await event.data.arrayBuffer();
+        socket.send(arrayBuffer);
+        console.log("Chunk sent, size:", arrayBuffer.byteLength);
       }
     };
     
