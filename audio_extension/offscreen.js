@@ -2,6 +2,7 @@ let recorder;
 let data = [];
 let mediaStream;
 let socket;
+let audioContext;
 
 function connectWebSocket() {
   socket = new WebSocket("ws://localhost:8765"); // Python WebSocket server
@@ -51,6 +52,10 @@ async function startRecording(streamId) {
 
     console.log("Offscreen: Media stream obtained");
 
+    audioContext = new AudioContext();
+    const source = audioContext.createMediaStreamSource(mediaStream);
+    source.connect(audioContext.destination);
+    
     // Create recorder
     recorder = new MediaRecorder(mediaStream, { mimeType: 'audio/webm' });
     
