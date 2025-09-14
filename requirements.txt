@@ -1,0 +1,13 @@
+# Dependencies for SimulStreaming
+librosa # dependency from WhisperStreaming:
+torchaudio # for using Silero VAD with WhisperStreaming, torchaudio is needed
+torch # from SimulWhisper
+tqdm # from Whisper
+tiktoken # from Whisper
+# both Whisper and SimulWhisper. SimulWhisper requires <3
+triton>=2.0.0,<3;platform_machine=="x86_64" and sys_platform=="linux" or sys_platform=="linux2"
+
+# Dependencies for podcast-overlay
+websockets
+PySide6
+pywin32
