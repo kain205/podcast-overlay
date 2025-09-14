@@ -55,7 +55,7 @@ async function startRecording(streamId) {
     audioContext = new AudioContext();
     const source = audioContext.createMediaStreamSource(mediaStream);
     source.connect(audioContext.destination);
-    
+
     // Create recorder
     recorder = new MediaRecorder(mediaStream, { mimeType: 'audio/webm' });
     
@@ -121,6 +121,12 @@ function stopRecording() {
   console.log("Offscreen: Stop recording requested");
   
   try {
+    
+    if (audioContext && audioContext.state !== 'closed') {
+      audioContext.close();
+      audioContext = null;
+      console.log("Offscreen: Audio context closed.");
+    }
     if (recorder && recorder.state === 'recording') {
       recorder.stop();
       console.log("Offscreen: Recorder stopped");
