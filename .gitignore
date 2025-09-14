@@ -3,3 +3,12 @@ build/
 
 # Temporary audio file
 downloads/
+
+# Ignore
+__pycache__/
+*.pyc
+*.pt
+
+# Test folder
+test/
+
