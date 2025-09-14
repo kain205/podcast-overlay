@@ -13,7 +13,7 @@ The system consists of four main components that run independently:
 
 ## Prerequisites
 
-*   Python 3.8+
+*   Python 3.10+
 *   `ffmpeg` installed and available in your system's PATH.
 *   A C++ compiler and build tools for dependencies.
 *   Google Chrome or a Chromium-based browser.
@@ -45,49 +45,57 @@ The system consists of four main components that run independently:
     pip install -r requirements.txt
     ```
 
-    *(Note: You will need to create a `requirements.txt` file containing `websockets`, `pyside6`, `pywin32`, `whisper-streaming`, etc.)*
-
 4.  **Load the Chrome Extension:**
     1.  Open Chrome and navigate to `chrome://extensions`.
     2.  Enable "Developer mode" using the toggle in the top-right corner.
     3.  Click "Load unpacked".
-    4.  Select the `new_extension` folder from this project.
+    4.  Select the `audio_extension` folder from this project.
     5.  The "Audio Catcher" extension should now appear in your extensions list.
 
-## How to Reproduce Step-by-Step
+## How to Run
 
-You will need to open **three separate terminal windows** and your Chrome browser.
+This project includes a batch script to simplify the startup process on Windows.
 
-### Step 1: Start the Transcription Server
+1.  **Activate your virtual environment:**
+    ```bash
+    .\venv\Scripts\activate
+    ```
+2.  **Run the script:**
+    Simply double-click `run.bat` or execute it from your terminal:
+    ```bash
+    run.bat
+    ```
+This will open a new Windows Terminal with three panes for the Transcription Server, Gateway Server, and Overlay Client.
 
-In your **first terminal**, navigate to the `SimulStreaming-main` directory and run the `simulstreaming_whisper_server.py`. This server will perform the transcription.
+### Manual Startup
 
+If you prefer to run each component manually, open three separate terminals.
+
+#### Step 1: Start the Transcription Server
+
+In your **first terminal**, run the transcription server:
 ```bash
-cd SimulStreaming-main
-python simulstreaming_whisper_server.py --model_path base.en --language en --task transcribe --warmup-file ../recording.wav
+python SimulStreaming/simulstreaming_whisper_server.py --model_path SimulStreaming/base.en.pt --language en --task transcribe --warmup-file samples/jfk.mp3 --log-level WARNING
 ```
 
-Keep this terminal running.
+#### Step 2: Start the Gateway Server
 
-### Step 2: Start the Gateway Server
-
-In your **second terminal**, run the `websocket.py` script from the project root. This server listens for audio from the Chrome extension.
-
+In your **second terminal**, run the gateway server:
 ```bash
 python websocket.py
 ```
 
-This will start listening on `ws://localhost:8765`. Keep this terminal running.
+#### Step 3: Start the Overlay Client
 
-### Step 3: Start the Overlay Client
-
-In your **third terminal**, run the `simple_overlay.py` script from the project root. This will open the transparent overlay window.
-
+In your **third terminal**, run the overlay client:
 ```bash
 python simple_overlay.py
 ```
 
-The overlay will appear on your screen.
+## How to Use the Overlay
+
+*   **Move:** Click and drag the overlay with the **left mouse button**.
+*   **Close:** **Right-click** anywhere on the overlay to close the application.
 
 ### Step 4: Send Audio from Chrome
 
